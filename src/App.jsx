@@ -6,9 +6,9 @@ import { Dashboard } from './components/Dashboard';
 import { Products } from './components/Products';
 import { Receipts } from './components/Receipts';
 import { Deliveries } from './components/Deliveries';
+import { Transfers } from './components/Transfers';
 import { Adjustments } from './components/Adjustments';
 import { Ledger } from './components/Ledger';
-import { Placeholder } from './components/Placeholder';
 
 const MainLayout = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -38,13 +38,7 @@ const MainLayout = () => {
       case 'deliveries':
         return <Deliveries />;
       case 'transfers':
-        return (
-          <Placeholder 
-            title="Internal Stock Transfers" 
-            description="Relocate inventory between internal zones, aisles, and separate warehouse facilities."
-            nextHourScope="Future Milestone"
-          />
-        );
+        return <Transfers />;
       case 'adjustments':
         return <Adjustments />;
       case 'ledger':

@@ -135,6 +135,29 @@ const defaultDeliveries = [
   }
 ];
 
+const defaultTransfers = [
+  {
+    id: 'INT/0001',
+    source: 'Main Warehouse',
+    destination: 'Production Floor',
+    status: 'PENDING',
+    date: '2026-09-26 09:30',
+    lines: [
+      { productId: 'PROD-001', productName: 'Steel Rods', sku: 'MAT-001', uom: 'Kg', quantity: 20 }
+    ]
+  },
+  {
+    id: 'INT/0002',
+    source: 'Production Floor',
+    destination: 'Main Warehouse',
+    status: 'VALIDATED',
+    date: '2026-09-25 14:15',
+    lines: [
+      { productId: 'PROD-002', productName: 'Office Chairs', sku: 'FUR-001', uom: 'Units', quantity: 5 }
+    ]
+  }
+];
+
 const defaultAdjustments = [
   {
     id: 'ADJ/0001',
@@ -183,8 +206,23 @@ const defaultLedger = [
     afterStock: 23,
     timestamp: '2026-09-25 17:10' 
   },
+  {
+    id: 'LEDGER-003',
+    type: 'INTERNAL TRANSFER',
+    reference: 'INT/0002',
+    productId: 'PROD-002',
+    productName: 'Office Chairs',
+    sku: 'FUR-001',
+    uom: 'Units',
+    quantity: '5',
+    source: 'Production Floor',
+    destination: 'Main Warehouse',
+    beforeStock: 23,
+    afterStock: 23,
+    timestamp: '2026-09-25 14:15'
+  },
   { 
-    id: 'LEDGER-003', 
+    id: 'LEDGER-004', 
     type: 'ADJUSTMENT', 
     reference: 'ADJ/0001', 
     productId: 'PROD-001',
@@ -224,6 +262,11 @@ export const InventoryProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : defaultDeliveries;
   });
 
+  const [transfers, setTransfers] = useState(() => {
+    const saved = localStorage.getItem('stocksense_transfers');
+    return saved ? JSON.parse(saved) : defaultTransfers;
+  });
+
   const [adjustments, setAdjustments] = useState(() => {
     const saved = localStorage.getItem('stocksense_adjustments');
     return saved ? JSON.parse(saved) : defaultAdjustments;
@@ -251,6 +294,10 @@ export const InventoryProvider = ({ children }) => {
   useEffect(() => {
     localStorage.setItem('stocksense_deliveries', JSON.stringify(deliveries));
   }, [deliveries]);
+
+  useEffect(() => {
+    localStorage.setItem('stocksense_transfers', JSON.stringify(transfers));
+  }, [transfers]);
 
   useEffect(() => {
     localStorage.setItem('stocksense_adjustments', JSON.stringify(adjustments));
@@ -491,6 +538,94 @@ export const InventoryProvider = ({ children }) => {
     return { success: true };
   };
 
+  // Internal Transfer Actions & Ledger Entry
+  const addTransfer = (transferData) => {
+    if (transferData.source === transferData.destination) {
+      return { success: false, message: 'Source and destination locations must be different.' };
+    }
+
+    const count = transfers.length + 1;
+    const newId = `INT/${count.toString().padStart(4, '0')}`;
+
+    const newTransfer = {
+      id: newId,
+      source: transferData.source,
+      destination: transferData.destination,
+      date: new Date().toISOString().split('T')[0],
+      status: 'PENDING',
+      lines: transferData.lines
+    };
+
+    setTransfers(prev => [newTransfer, ...prev]);
+    showNotification(`Internal Transfer '${newId}' created as PENDING.`);
+    return { success: true, transfer: newTransfer };
+  };
+
+  const validateTransfer = (transferId) => {
+    const targetTransfer = transfers.find(t => t.id === transferId);
+    if (!targetTransfer) return { success: false, message: 'Transfer order not found.' };
+
+    if (targetTransfer.status === 'VALIDATED') {
+      return { success: false, message: 'Transfer is already validated.' };
+    }
+
+    // Current stock recheck at source location before validation
+    for (const line of targetTransfer.lines) {
+      const prod = products.find(p => p.id === line.productId);
+      const availableSourceQty = prod?.stockByLocation?.[targetTransfer.source] || 0;
+      if (!prod || availableSourceQty < line.quantity) {
+        return {
+          success: false,
+          message: `Insufficient stock for '${line.productName}' at ${targetTransfer.source}. Available: ${availableSourceQty} ${line.uom}, Requested: ${line.quantity}.`
+        };
+      }
+    }
+
+    let newLedgerEntries = [];
+
+    setProducts(prevProducts => {
+      return prevProducts.map(product => {
+        const line = targetTransfer.lines.find(l => l.productId === product.id);
+        if (!line) return product;
+
+        const qtyToMove = parseInt(line.quantity, 10) || 0;
+        const currentSourceQty = product.stockByLocation?.[targetTransfer.source] || 0;
+        const currentDestQty = product.stockByLocation?.[targetTransfer.destination] || 0;
+
+        newLedgerEntries.push({
+          id: `LEDGER-${Date.now()}-${line.productId}`,
+          type: 'INTERNAL TRANSFER',
+          reference: targetTransfer.id,
+          productId: product.id,
+          productName: product.name,
+          sku: product.sku,
+          uom: product.uom,
+          quantity: `${qtyToMove}`,
+          source: targetTransfer.source,
+          destination: targetTransfer.destination,
+          beforeStock: product.quantity,
+          afterStock: product.quantity, // Total stock remains unchanged!
+          timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16)
+        });
+
+        return {
+          ...product,
+          // Total product quantity remains EXACTLY the same
+          stockByLocation: {
+            ...(product.stockByLocation || {}),
+            [targetTransfer.source]: Math.max(0, currentSourceQty - qtyToMove),
+            [targetTransfer.destination]: currentDestQty + qtyToMove
+          }
+        };
+      });
+    });
+
+    setTransfers(prev => prev.map(t => t.id === transferId ? { ...t, status: 'VALIDATED' } : t));
+    setLedger(prev => [...newLedgerEntries, ...prev]);
+    showNotification(`Transfer '${transferId}' validated! Stock relocated successfully.`);
+    return { success: true };
+  };
+
   // Stock Adjustment Actions & Ledger Entry
   const addAdjustment = (adjData) => {
     const count = adjustments.length + 1;
@@ -535,12 +670,10 @@ export const InventoryProvider = ({ children }) => {
       return prevProducts.map(product => {
         if (product.id !== targetAdj.productId) return product;
 
-        // Current stock recheck before applying physical count
         const currentLocQty = product.stockByLocation?.[targetAdj.location] || 0;
         const currentGlobalQty = product.quantity;
         const physicalQty = targetAdj.physicalQty;
 
-        // Recalculate difference based on live system stock
         const locDiff = physicalQty - currentLocQty;
         const newGlobalQty = Math.max(0, currentGlobalQty + locDiff);
 
@@ -588,12 +721,14 @@ export const InventoryProvider = ({ children }) => {
   const outOfStockItems = products.filter(p => p.quantity === 0);
   const pendingReceiptsCount = receipts.filter(r => r.status === 'PENDING').length;
   const pendingDeliveriesCount = deliveries.filter(d => d.status !== 'VALIDATED').length;
+  const pendingTransfersCount = transfers.filter(t => t.status === 'PENDING').length;
 
   return (
     <InventoryContext.Provider value={{
       products,
       receipts,
       deliveries,
+      transfers,
       adjustments,
       ledger,
       suppliers,
@@ -608,6 +743,8 @@ export const InventoryProvider = ({ children }) => {
       addDelivery,
       updateDeliveryStatus,
       validateDelivery,
+      addTransfer,
+      validateTransfer,
       addAdjustment,
       validateAdjustment,
       getStockStatus,
@@ -619,6 +756,7 @@ export const InventoryProvider = ({ children }) => {
         outOfStockCount: outOfStockItems.length,
         pendingReceiptsCount,
         pendingDeliveriesCount,
+        pendingTransfersCount,
       },
       lowStockItems,
       outOfStockItems
