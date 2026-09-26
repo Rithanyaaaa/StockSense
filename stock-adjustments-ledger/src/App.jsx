@@ -6,8 +6,6 @@ import { Dashboard } from './components/Dashboard';
 import { Products } from './components/Products';
 import { Receipts } from './components/Receipts';
 import { Deliveries } from './components/Deliveries';
-import { Adjustments } from './components/Adjustments';
-import { Ledger } from './components/Ledger';
 import { Placeholder } from './components/Placeholder';
 
 const MainLayout = () => {
@@ -42,13 +40,25 @@ const MainLayout = () => {
           <Placeholder 
             title="Internal Stock Transfers" 
             description="Relocate inventory between internal zones, aisles, and separate warehouse facilities."
-            nextHourScope="Future Milestone"
+            nextHourScope="Hour 5 Milestone"
           />
         );
       case 'adjustments':
-        return <Adjustments />;
+        return (
+          <Placeholder 
+            title="Stock Adjustments" 
+            description="Perform physical inventory counts, reconcile discrepancies, and record scrap/damage."
+            nextHourScope="Hour 5 Milestone"
+          />
+        );
       case 'ledger':
-        return <Ledger />;
+        return (
+          <Placeholder 
+            title="Move History / Stock Ledger" 
+            description="Full immutable double-entry stock movement log tracking all historical receipts, deliveries, and transfers."
+            nextHourScope="Hour 6 Milestone"
+          />
+        );
       default:
         return <Dashboard />;
     }

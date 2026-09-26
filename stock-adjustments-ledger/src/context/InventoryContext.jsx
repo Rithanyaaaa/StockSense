@@ -135,69 +135,13 @@ const defaultDeliveries = [
   }
 ];
 
-const defaultAdjustments = [
-  {
-    id: 'ADJ/0001',
-    productId: 'PROD-001',
-    productName: 'Steel Rods',
-    sku: 'MAT-001',
-    uom: 'Kg',
-    location: 'Main Warehouse',
-    systemQty: 100,
-    physicalQty: 97,
-    difference: -3,
-    reason: 'Physical stock count',
-    status: 'VALIDATED',
-    date: '2026-09-26 11:30'
-  }
+const initialTransfers = [
+  { id: 'TR-2026-014', fromLocation: 'Main Warehouse', toLocation: 'Production Floor', itemsCount: 25, status: 'Pending', createdAt: '2026-09-26 08:30' }
 ];
 
-const defaultLedger = [
-  { 
-    id: 'LEDGER-001', 
-    type: 'RECEIPT', 
-    reference: 'WH/IN/0002', 
-    productId: 'PROD-002',
-    productName: 'Office Chairs', 
-    sku: 'FUR-001',
-    uom: 'Units',
-    quantity: '+20', 
-    source: 'Global Industrial', 
-    destination: 'Main Warehouse', 
-    beforeStock: 8,
-    afterStock: 28,
-    timestamp: '2026-09-25 16:20' 
-  },
-  { 
-    id: 'LEDGER-002', 
-    type: 'DELIVERY', 
-    reference: 'WH/OUT/0002', 
-    productId: 'PROD-002',
-    productName: 'Office Chairs', 
-    sku: 'FUR-001',
-    uom: 'Units',
-    quantity: '-5', 
-    source: 'Main Warehouse', 
-    destination: 'Metro Distributors', 
-    beforeStock: 28,
-    afterStock: 23,
-    timestamp: '2026-09-25 17:10' 
-  },
-  { 
-    id: 'LEDGER-003', 
-    type: 'ADJUSTMENT', 
-    reference: 'ADJ/0001', 
-    productId: 'PROD-001',
-    productName: 'Steel Rods', 
-    sku: 'MAT-001',
-    uom: 'Kg',
-    quantity: '-3', 
-    source: 'Main Warehouse', 
-    destination: 'Audit Correction', 
-    beforeStock: 100,
-    afterStock: 97,
-    timestamp: '2026-09-26 11:30' 
-  }
+const defaultMovements = [
+  { id: 'MOV-1001', type: 'Receipt', reference: 'WH/IN/0002', productName: 'Office Chairs', qty: '+20', from: 'Global Industrial', to: 'Main Warehouse', timestamp: '2026-09-25 16:20' },
+  { id: 'MOV-1002', type: 'Delivery', reference: 'WH/OUT/0002', productName: 'Office Chairs', qty: '-5', from: 'Main Warehouse', to: 'Metro Distributors', timestamp: '2026-09-25 17:10' }
 ];
 
 const initialLocations = [
@@ -224,18 +168,13 @@ export const InventoryProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : defaultDeliveries;
   });
 
-  const [adjustments, setAdjustments] = useState(() => {
-    const saved = localStorage.getItem('stocksense_adjustments');
-    return saved ? JSON.parse(saved) : defaultAdjustments;
-  });
-
-  const [ledger, setLedger] = useState(() => {
-    const saved = localStorage.getItem('stocksense_ledger');
-    return saved ? JSON.parse(saved) : defaultLedger;
-  });
-
   const [suppliers] = useState(defaultSuppliers);
   const [customers] = useState(defaultCustomers);
+  const [transfers] = useState(initialTransfers);
+  const [movements, setMovements] = useState(() => {
+    const saved = localStorage.getItem('stocksense_movements');
+    return saved ? JSON.parse(saved) : defaultMovements;
+  });
   const [locations] = useState(initialLocations);
   const [notification, setNotification] = useState(null);
 
@@ -253,12 +192,8 @@ export const InventoryProvider = ({ children }) => {
   }, [deliveries]);
 
   useEffect(() => {
-    localStorage.setItem('stocksense_adjustments', JSON.stringify(adjustments));
-  }, [adjustments]);
-
-  useEffect(() => {
-    localStorage.setItem('stocksense_ledger', JSON.stringify(ledger));
-  }, [ledger]);
+    localStorage.setItem('stocksense_movements', JSON.stringify(movements));
+  }, [movements]);
 
   const showNotification = (msg, type = 'success') => {
     setNotification({ msg, type });
@@ -325,13 +260,14 @@ export const InventoryProvider = ({ children }) => {
     showNotification(`Product '${prod?.name || 'Item'}' deleted successfully.`, 'info');
   };
 
+  // Helper to calculate stock status dynamically
   const getStockStatus = (quantity, reorderPoint) => {
     if (quantity === 0) return 'OUT OF STOCK';
     if (quantity <= reorderPoint) return 'LOW STOCK';
     return 'IN STOCK';
   };
 
-  // Receipt Actions & Ledger Entry
+  // Receipt Actions
   const addReceipt = (receiptData) => {
     const count = receipts.length + 1;
     const newId = `WH/IN/${count.toString().padStart(4, '0')}`;
@@ -358,8 +294,6 @@ export const InventoryProvider = ({ children }) => {
       return { success: false, message: 'Receipt is already validated.' };
     }
 
-    let newLedgerEntries = [];
-
     setProducts(prevProducts => {
       return prevProducts.map(product => {
         const line = targetReceipt.lines.find(l => l.productId === product.id);
@@ -367,28 +301,10 @@ export const InventoryProvider = ({ children }) => {
 
         const qtyToAdd = parseInt(line.quantity, 10) || 0;
         const currentLocQty = product.stockByLocation?.[targetReceipt.destination] || 0;
-        const beforeStock = product.quantity;
-        const afterStock = beforeStock + qtyToAdd;
-
-        newLedgerEntries.push({
-          id: `LEDGER-${Date.now()}-${line.productId}`,
-          type: 'RECEIPT',
-          reference: targetReceipt.id,
-          productId: product.id,
-          productName: product.name,
-          sku: product.sku,
-          uom: product.uom,
-          quantity: `+${qtyToAdd}`,
-          source: targetReceipt.supplier,
-          destination: targetReceipt.destination,
-          beforeStock: beforeStock,
-          afterStock: afterStock,
-          timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16)
-        });
 
         return {
           ...product,
-          quantity: afterStock,
+          quantity: product.quantity + qtyToAdd,
           stockByLocation: {
             ...(product.stockByLocation || {}),
             [targetReceipt.destination]: currentLocQty + qtyToAdd
@@ -397,13 +313,25 @@ export const InventoryProvider = ({ children }) => {
       });
     });
 
-    setReceipts(prev => prev.map(r => r.id === receiptId ? { ...r, status: 'VALIDATED' } : r));
-    setLedger(prev => [...newLedgerEntries, ...prev]);
-    showNotification(`Receipt '${receiptId}' validated! Stock updated and logged.`);
+    setReceipts(prevReceipts => prevReceipts.map(r => r.id === receiptId ? { ...r, status: 'VALIDATED' } : r));
+
+    const newMovements = targetReceipt.lines.map((line, idx) => ({
+      id: `MOV-${Date.now().toString().slice(-4)}-${idx}`,
+      type: 'Receipt',
+      reference: targetReceipt.id,
+      productName: line.productName,
+      qty: `+${line.quantity}`,
+      from: targetReceipt.supplier,
+      to: targetReceipt.destination,
+      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16)
+    }));
+
+    setMovements(prev => [...newMovements, ...prev]);
+    showNotification(`Receipt '${receiptId}' validated! Stock updated successfully.`);
     return { success: true };
   };
 
-  // Delivery Actions & Ledger Entry
+  // Delivery Actions (DRAFT -> READY -> PICKED -> PACKED -> VALIDATED)
   const addDelivery = (deliveryData) => {
     const count = deliveries.length + 1;
     const newId = `WH/OUT/${count.toString().padStart(4, '0')}`;
@@ -413,7 +341,7 @@ export const InventoryProvider = ({ children }) => {
       customer: deliveryData.customer,
       source: deliveryData.source,
       date: new Date().toISOString().split('T')[0],
-      status: 'READY',
+      status: 'READY', // Starts as READY for Pick/Pack workflow
       lines: deliveryData.lines
     };
 
@@ -435,6 +363,7 @@ export const InventoryProvider = ({ children }) => {
       return { success: false, message: 'Delivery order is already validated.' };
     }
 
+    // Safety check: Re-verify current stock at source location before validation
     for (const line of targetDelivery.lines) {
       const prod = products.find(p => p.id === line.productId);
       const availableLocStock = prod?.stockByLocation?.[targetDelivery.source] || 0;
@@ -446,8 +375,7 @@ export const InventoryProvider = ({ children }) => {
       }
     }
 
-    let newLedgerEntries = [];
-
+    // 1. Subtract stock specifically from selected source location and total quantity
     setProducts(prevProducts => {
       return prevProducts.map(product => {
         const line = targetDelivery.lines.find(l => l.productId === product.id);
@@ -455,28 +383,10 @@ export const InventoryProvider = ({ children }) => {
 
         const qtyToSubtract = parseInt(line.quantity, 10) || 0;
         const currentLocQty = product.stockByLocation?.[targetDelivery.source] || 0;
-        const beforeStock = product.quantity;
-        const afterStock = Math.max(0, beforeStock - qtyToSubtract);
-
-        newLedgerEntries.push({
-          id: `LEDGER-${Date.now()}-${line.productId}`,
-          type: 'DELIVERY',
-          reference: targetDelivery.id,
-          productId: product.id,
-          productName: product.name,
-          sku: product.sku,
-          uom: product.uom,
-          quantity: `-${qtyToSubtract}`,
-          source: targetDelivery.source,
-          destination: targetDelivery.customer,
-          beforeStock: beforeStock,
-          afterStock: afterStock,
-          timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16)
-        });
 
         return {
           ...product,
-          quantity: afterStock,
+          quantity: Math.max(0, product.quantity - qtyToSubtract),
           stockByLocation: {
             ...(product.stockByLocation || {}),
             [targetDelivery.source]: Math.max(0, currentLocQty - qtyToSubtract)
@@ -485,98 +395,23 @@ export const InventoryProvider = ({ children }) => {
       });
     });
 
-    setDeliveries(prev => prev.map(d => d.id === deliveryId ? { ...d, status: 'VALIDATED' } : d));
-    setLedger(prev => [...newLedgerEntries, ...prev]);
-    showNotification(`Delivery '${deliveryId}' validated! Stock dispatched and logged.`);
-    return { success: true };
-  };
+    // 2. Mark delivery status as VALIDATED
+    setDeliveries(prevDeliveries => prevDeliveries.map(d => d.id === deliveryId ? { ...d, status: 'VALIDATED' } : d));
 
-  // Stock Adjustment Actions & Ledger Entry
-  const addAdjustment = (adjData) => {
-    const count = adjustments.length + 1;
-    const newId = `ADJ/${count.toString().padStart(4, '0')}`;
+    // 3. Log movement for future Stock Ledger audit trail
+    const newMovements = targetDelivery.lines.map((line, idx) => ({
+      id: `MOV-${Date.now().toString().slice(-4)}-${idx}`,
+      type: 'Delivery',
+      reference: targetDelivery.id,
+      productName: line.productName,
+      qty: `-${line.quantity}`,
+      from: targetDelivery.source,
+      to: targetDelivery.customer,
+      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16)
+    }));
 
-    const prod = products.find(p => p.id === adjData.productId);
-    const systemQty = prod?.stockByLocation?.[adjData.location] || 0;
-    const physicalQty = parseInt(adjData.physicalQty, 10) || 0;
-    const difference = physicalQty - systemQty;
-
-    const newAdj = {
-      id: newId,
-      productId: prod.id,
-      productName: prod.name,
-      sku: prod.sku,
-      uom: prod.uom,
-      location: adjData.location,
-      systemQty: systemQty,
-      physicalQty: physicalQty,
-      difference: difference,
-      reason: adjData.reason || 'Physical stock count',
-      status: 'PENDING',
-      date: new Date().toISOString().replace('T', ' ').slice(0, 16)
-    };
-
-    setAdjustments(prev => [newAdj, ...prev]);
-    showNotification(`Stock Adjustment '${newId}' created as PENDING.`);
-    return { success: true, adjustment: newAdj };
-  };
-
-  const validateAdjustment = (adjId) => {
-    const targetAdj = adjustments.find(a => a.id === adjId);
-    if (!targetAdj) return { success: false, message: 'Adjustment not found.' };
-
-    if (targetAdj.status === 'VALIDATED') {
-      return { success: false, message: 'Adjustment is already validated.' };
-    }
-
-    let ledgerEntry = null;
-
-    setProducts(prevProducts => {
-      return prevProducts.map(product => {
-        if (product.id !== targetAdj.productId) return product;
-
-        // Current stock recheck before applying physical count
-        const currentLocQty = product.stockByLocation?.[targetAdj.location] || 0;
-        const currentGlobalQty = product.quantity;
-        const physicalQty = targetAdj.physicalQty;
-
-        // Recalculate difference based on live system stock
-        const locDiff = physicalQty - currentLocQty;
-        const newGlobalQty = Math.max(0, currentGlobalQty + locDiff);
-
-        ledgerEntry = {
-          id: `LEDGER-${Date.now()}-${product.id}`,
-          type: 'ADJUSTMENT',
-          reference: targetAdj.id,
-          productId: product.id,
-          productName: product.name,
-          sku: product.sku,
-          uom: product.uom,
-          quantity: locDiff >= 0 ? `+${locDiff}` : `${locDiff}`,
-          source: targetAdj.location,
-          destination: `Reconciled to ${physicalQty}`,
-          beforeStock: currentGlobalQty,
-          afterStock: newGlobalQty,
-          timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16)
-        };
-
-        return {
-          ...product,
-          quantity: newGlobalQty,
-          stockByLocation: {
-            ...(product.stockByLocation || {}),
-            [targetAdj.location]: physicalQty
-          }
-        };
-      });
-    });
-
-    setAdjustments(prev => prev.map(a => a.id === adjId ? { ...a, status: 'VALIDATED' } : a));
-    if (ledgerEntry) {
-      setLedger(prev => [ledgerEntry, ...prev]);
-    }
-
-    showNotification(`Stock Adjustment '${adjId}' validated! Stock reconciled to physical count.`);
+    setMovements(prev => [...newMovements, ...prev]);
+    showNotification(`Delivery '${deliveryId}' validated! Stock dispatched successfully.`);
     return { success: true };
   };
 
@@ -588,16 +423,17 @@ export const InventoryProvider = ({ children }) => {
   const outOfStockItems = products.filter(p => p.quantity === 0);
   const pendingReceiptsCount = receipts.filter(r => r.status === 'PENDING').length;
   const pendingDeliveriesCount = deliveries.filter(d => d.status !== 'VALIDATED').length;
+  const pendingTransfersCount = transfers.filter(t => t.status === 'Pending').length;
 
   return (
     <InventoryContext.Provider value={{
       products,
       receipts,
       deliveries,
-      adjustments,
-      ledger,
       suppliers,
       customers,
+      transfers,
+      movements,
       locations,
       notification,
       addProduct,
@@ -608,8 +444,6 @@ export const InventoryProvider = ({ children }) => {
       addDelivery,
       updateDeliveryStatus,
       validateDelivery,
-      addAdjustment,
-      validateAdjustment,
       getStockStatus,
       kpis: {
         totalProducts,
@@ -619,6 +453,7 @@ export const InventoryProvider = ({ children }) => {
         outOfStockCount: outOfStockItems.length,
         pendingReceiptsCount,
         pendingDeliveriesCount,
+        pendingTransfersCount,
       },
       lowStockItems,
       outOfStockItems
