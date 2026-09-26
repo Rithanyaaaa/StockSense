@@ -129,14 +129,14 @@ export const Products = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%' }}>
       {/* Header Action Bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'nowrap', gap: '16px' }}>
         <div>
-          <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '0.5px' }}>
-            PRODUCT CATALOG ({filteredProducts.length})
+          <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '0.5px', margin: 0 }}>
+            PRODUCT MASTER CATALOG ({filteredProducts.length})
           </h2>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '2px 0 0 0' }}>
             Manage inventory items, SKUs, reorder levels, and location assignments.
           </p>
         </div>
@@ -286,28 +286,28 @@ export const Products = () => {
                 const status = getStockStatus(p.quantity, p.reorderPoint);
                 return (
                   <tr key={p.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background-color 0.15s' }}>
-                    <td style={{ padding: '12px 16px', color: 'var(--text-primary)', fontWeight: 700 }}>
+                    <td style={{ padding: '14px 16px', color: 'var(--text-primary)', fontWeight: 700, verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                       {p.name}
                     </td>
-                    <td style={{ padding: '12px 16px', color: 'var(--accent-primary)', fontWeight: 700, fontFamily: 'monospace' }}>
+                    <td style={{ padding: '14px 16px', color: 'var(--accent-primary)', fontWeight: 700, fontFamily: 'monospace', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                       {p.sku}
                     </td>
-                    <td style={{ padding: '12px 16px', color: 'var(--text-secondary)' }}>
+                    <td style={{ padding: '14px 16px', color: 'var(--text-secondary)', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                       {p.category}
                     </td>
-                    <td style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>
+                    <td style={{ padding: '14px 16px', color: 'var(--text-muted)', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                       {p.uom}
                     </td>
-                    <td style={{ padding: '12px 16px', fontWeight: 800, fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                    <td style={{ padding: '14px 16px', fontWeight: 800, fontSize: '0.85rem', color: 'var(--text-primary)', verticalAlign: 'middle' }}>
                       {p.quantity}
                     </td>
-                    <td style={{ padding: '12px 16px', color: 'var(--text-muted)' }}>
+                    <td style={{ padding: '14px 16px', color: 'var(--text-muted)', verticalAlign: 'middle' }}>
                       {p.reorderPoint}
                     </td>
-                    <td style={{ padding: '12px 16px', color: 'var(--text-secondary)' }}>
+                    <td style={{ padding: '14px 16px', color: 'var(--text-secondary)', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                       {p.location}
                     </td>
-                    <td style={{ padding: '12px 16px' }}>
+                    <td style={{ padding: '14px 16px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                       <span className="gsharp-badge" style={{
                         color: status === 'IN STOCK' ? 'var(--accent-green)' : status === 'LOW STOCK' ? 'var(--accent-yellow)' : 'var(--accent-red)',
                         borderColor: status === 'IN STOCK' ? 'var(--accent-green)' : status === 'LOW STOCK' ? 'var(--accent-yellow)' : 'var(--accent-red)'
@@ -315,7 +315,7 @@ export const Products = () => {
                         {status}
                       </span>
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                    <td style={{ padding: '14px 16px', textAlign: 'right', verticalAlign: 'middle' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
                         <button
                           onClick={() => setViewingProduct(p)}
