@@ -670,6 +670,7 @@ export const InventoryProvider = ({ children }) => {
       return prevProducts.map(product => {
         if (product.id !== targetAdj.productId) return product;
 
+        // Re-read authoritative current stock at time of validation
         const currentLocQty = product.stockByLocation?.[targetAdj.location] || 0;
         const currentGlobalQty = product.quantity;
         const physicalQty = targetAdj.physicalQty;
@@ -704,7 +705,7 @@ export const InventoryProvider = ({ children }) => {
       });
     });
 
-    setAdjustments(prev => prev.map(a => a.id === adjId ? { ...a, status: 'VALIDATED' } : a));
+    setAdjustments(prev => prev.map(a => a.id === adjId ? { ...a, status: 'VALIDATED', systemQty: targetAdj.systemQty, difference: targetAdj.difference } : a));
     if (ledgerEntry) {
       setLedger(prev => [ledgerEntry, ...prev]);
     }
