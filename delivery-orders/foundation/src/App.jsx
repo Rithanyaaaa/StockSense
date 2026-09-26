@@ -1,16 +1,12 @@
 import React, { useState } from 'react';
-import { InventoryProvider, useInventory } from './context/InventoryContext';
+import { InventoryProvider } from './context/InventoryContext';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { Dashboard } from './components/Dashboard';
-import { Products } from './components/Products';
-import { Receipts } from './components/Receipts';
-import { Deliveries } from './components/Deliveries';
 import { Placeholder } from './components/Placeholder';
 
-const MainLayout = () => {
+export function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const { notification } = useInventory();
 
   const getTabTitle = () => {
     switch (activeTab) {
@@ -30,17 +26,35 @@ const MainLayout = () => {
       case 'dashboard':
         return <Dashboard />;
       case 'products':
-        return <Products />;
+        return (
+          <Placeholder 
+            title="Products" 
+            description="Manage stock keeping units (SKUs), categories, reorder levels, unit prices, and warehouse locations."
+            nextHourScope="Hour 2 Milestone"
+          />
+        );
       case 'receipts':
-        return <Receipts />;
+        return (
+          <Placeholder 
+            title="Incoming Stock Receipts" 
+            description="Process incoming purchase orders, receive supplier shipments, and update inventory counts."
+            nextHourScope="Hour 3 Milestone"
+          />
+        );
       case 'deliveries':
-        return <Deliveries />;
+        return (
+          <Placeholder 
+            title="Delivery Orders" 
+            description="Pick, pack, ship outgoing customer orders, and subtract stock from designated locations."
+            nextHourScope="Hour 3 Milestone"
+          />
+        );
       case 'transfers':
         return (
           <Placeholder 
             title="Internal Stock Transfers" 
             description="Relocate inventory between internal zones, aisles, and separate warehouse facilities."
-            nextHourScope="Hour 5 Milestone"
+            nextHourScope="Hour 4 Milestone"
           />
         );
       case 'adjustments':
@@ -48,7 +62,7 @@ const MainLayout = () => {
           <Placeholder 
             title="Stock Adjustments" 
             description="Perform physical inventory counts, reconcile discrepancies, and record scrap/damage."
-            nextHourScope="Hour 5 Milestone"
+            nextHourScope="Hour 4 Milestone"
           />
         );
       case 'ledger':
@@ -56,7 +70,7 @@ const MainLayout = () => {
           <Placeholder 
             title="Move History / Stock Ledger" 
             description="Full immutable double-entry stock movement log tracking all historical receipts, deliveries, and transfers."
-            nextHourScope="Hour 6 Milestone"
+            nextHourScope="Hour 5 Milestone"
           />
         );
       default:
@@ -65,41 +79,16 @@ const MainLayout = () => {
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg-dark)' }}>
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <Header title={getTabTitle()} />
-
-        {/* Global Toast Notification */}
-        {notification && (
-          <div style={{
-            position: 'fixed',
-            bottom: '24px',
-            right: '24px',
-            backgroundColor: notification.type === 'info' ? 'var(--accent-blue)' : 'var(--accent-green)',
-            color: '#ffffff',
-            padding: '12px 20px',
-            fontSize: '0.8rem',
-            fontWeight: 700,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            zIndex: 999
-          }}>
-            {notification.msg}
-          </div>
-        )}
-
-        <main style={{ padding: '28px', flex: 1 }}>
-          {renderContent()}
-        </main>
-      </div>
-    </div>
-  );
-};
-
-export function App() {
-  return (
     <InventoryProvider>
-      <MainLayout />
+      <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg-dark)' }}>
+        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <Header title={getTabTitle()} />
+          <main style={{ padding: '32px', flex: 1 }}>
+            {renderContent()}
+          </main>
+        </div>
+      </div>
     </InventoryProvider>
   );
 }
