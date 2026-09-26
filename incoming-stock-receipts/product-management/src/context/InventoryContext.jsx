@@ -76,33 +76,9 @@ const defaultProducts = [
   }
 ];
 
-const defaultSuppliers = [
-  { id: 'SUP-001', name: 'ABC Supplies', contact: 'sales@abcsupplies.com' },
-  { id: 'SUP-002', name: 'Global Industrial', contact: 'orders@globalind.com' },
-  { id: 'SUP-003', name: 'Prime Traders', contact: 'info@primetraders.in' }
-];
-
-const defaultReceipts = [
-  { 
-    id: 'WH/IN/0001', 
-    supplier: 'ABC Supplies', 
-    date: '2026-09-26', 
-    destination: 'Main Warehouse', 
-    status: 'PENDING',
-    lines: [
-      { productId: 'PROD-001', productName: 'Steel Rods', sku: 'MAT-001', uom: 'Kg', quantity: 50 }
-    ]
-  },
-  { 
-    id: 'WH/IN/0002', 
-    supplier: 'Global Industrial', 
-    date: '2026-09-25', 
-    destination: 'Main Warehouse', 
-    status: 'VALIDATED',
-    lines: [
-      { productId: 'PROD-002', productName: 'Office Chairs', sku: 'FUR-001', uom: 'Units', quantity: 20 }
-    ]
-  }
+const initialReceipts = [
+  { id: 'REC-2026-001', supplier: 'TechParts Direct', date: '2026-09-27', itemsCount: 150, status: 'Pending', expectedLocation: 'Main Warehouse' },
+  { id: 'REC-2026-002', supplier: 'ErgoComfort Inc', date: '2026-09-28', itemsCount: 40, status: 'Pending', expectedLocation: 'Main Warehouse' }
 ];
 
 const initialDeliveries = [
@@ -113,8 +89,9 @@ const initialTransfers = [
   { id: 'TR-2026-014', fromLocation: 'Main Warehouse', toLocation: 'Production Floor', itemsCount: 25, status: 'Pending', createdAt: '2026-09-26 08:30' }
 ];
 
-const defaultMovements = [
-  { id: 'MOV-1001', type: 'Receipt', reference: 'WH/IN/0002', productName: 'Office Chairs', qty: '+20', from: 'Global Industrial', to: 'Main Warehouse', timestamp: '2026-09-25 16:20' }
+const initialMovements = [
+  { id: 'MOV-1001', type: 'Receipt', reference: 'REC-2026-003', productName: 'Wireless Keyboard', qty: '+50', from: 'Supplier', to: 'Production Floor', timestamp: '2026-09-25 16:20' },
+  { id: 'MOV-1002', type: 'Delivery', reference: 'DEL-2026-091', productName: 'Steel Rods', qty: '-20', from: 'Main Warehouse', to: 'Customer (Nexus)', timestamp: '2026-09-26 09:10' }
 ];
 
 const initialLocations = [
@@ -131,18 +108,10 @@ export const InventoryProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : defaultProducts;
   });
 
-  const [receipts, setReceipts] = useState(() => {
-    const saved = localStorage.getItem('stocksense_receipts');
-    return saved ? JSON.parse(saved) : defaultReceipts;
-  });
-
-  const [suppliers] = useState(defaultSuppliers);
+  const [receipts] = useState(initialReceipts);
   const [deliveries] = useState(initialDeliveries);
   const [transfers] = useState(initialTransfers);
-  const [movements, setMovements] = useState(() => {
-    const saved = localStorage.getItem('stocksense_movements');
-    return saved ? JSON.parse(saved) : defaultMovements;
-  });
+  const [movements] = useState(initialMovements);
   const [locations] = useState(initialLocations);
   const [notification, setNotification] = useState(null);
 
@@ -150,14 +119,6 @@ export const InventoryProvider = ({ children }) => {
   useEffect(() => {
     localStorage.setItem('stocksense_products', JSON.stringify(products));
   }, [products]);
-
-  useEffect(() => {
-    localStorage.setItem('stocksense_receipts', JSON.stringify(receipts));
-  }, [receipts]);
-
-  useEffect(() => {
-    localStorage.setItem('stocksense_movements', JSON.stringify(movements));
-  }, [movements]);
 
   const showNotification = (msg, type = 'success') => {
     setNotification({ msg, type });
@@ -193,6 +154,7 @@ export const InventoryProvider = ({ children }) => {
   };
 
   const editProduct = (id, updatedFields) => {
+    // Check duplicate SKU if changed
     const existing = products.find(p => p.id !== id && p.sku.toLowerCase() === updatedFields.sku.toLowerCase());
     if (existing) {
       return { success: false, message: `SKU '${updatedFields.sku}' is used by another product.` };
@@ -209,6 +171,7 @@ export const InventoryProvider = ({ children }) => {
           location: updatedFields.location,
           reorderPoint: parseInt(updatedFields.reorderPoint, 10) || 0,
           unitPrice: parseFloat(updatedFields.unitPrice) || p.unitPrice
+          // Note: Stock quantity is preserved and not edited directly in product edit
         };
       }
       return p;
@@ -231,82 +194,13 @@ export const InventoryProvider = ({ children }) => {
     return 'IN STOCK';
   };
 
-  // Receipt Creation Action (saves as PENDING, does NOT affect stock)
-  const addReceipt = (receiptData) => {
-    const count = receipts.length + 1;
-    const newId = `WH/IN/${count.toString().padStart(4, '0')}`;
-
-    const newReceipt = {
-      id: newId,
-      supplier: receiptData.supplier,
-      destination: receiptData.destination,
-      date: new Date().toISOString().split('T')[0],
-      status: 'PENDING',
-      lines: receiptData.lines
-    };
-
-    setReceipts(prev => [newReceipt, ...prev]);
-    showNotification(`Receipt '${newId}' created as PENDING.`);
-    return { success: true, receipt: newReceipt };
-  };
-
-  // Receipt Validation Action (increases stock per product & location)
-  const validateReceipt = (receiptId) => {
-    const targetReceipt = receipts.find(r => r.id === receiptId);
-    if (!targetReceipt) return { success: false, message: 'Receipt not found.' };
-
-    if (targetReceipt.status === 'VALIDATED') {
-      return { success: false, message: 'Receipt is already validated.' };
-    }
-
-    // 1. Update Products state (Global Quantity & Location Breakdown)
-    setProducts(prevProducts => {
-      return prevProducts.map(product => {
-        // Find if this product is in the receipt lines
-        const line = targetReceipt.lines.find(l => l.productId === product.id);
-        if (!line) return product;
-
-        const qtyToAdd = parseInt(line.quantity, 10) || 0;
-        const currentLocQty = product.stockByLocation?.[targetReceipt.destination] || 0;
-
-        return {
-          ...product,
-          quantity: product.quantity + qtyToAdd,
-          stockByLocation: {
-            ...(product.stockByLocation || {}),
-            [targetReceipt.destination]: currentLocQty + qtyToAdd
-          }
-        };
-      });
-    });
-
-    // 2. Mark receipt as VALIDATED
-    setReceipts(prevReceipts => prevReceipts.map(r => r.id === receiptId ? { ...r, status: 'VALIDATED' } : r));
-
-    // 3. Log stock movements for Future Stock Ledger preparedness
-    const newMovements = targetReceipt.lines.map((line, idx) => ({
-      id: `MOV-${Date.now().toString().slice(-4)}-${idx}`,
-      type: 'Receipt',
-      reference: targetReceipt.id,
-      productName: line.productName,
-      qty: `+${line.quantity}`,
-      from: targetReceipt.supplier,
-      to: targetReceipt.destination,
-      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 16)
-    }));
-
-    setMovements(prev => [...newMovements, ...prev]);
-    showNotification(`Receipt '${receiptId}' validated! Stock updated successfully.`);
-    return { success: true };
-  };
-
-  // Computed KPIs dynamically derived from current state
+  // Computed KPIs dynamically derived from current products state
   const totalProducts = products.length;
   const totalStockQuantity = products.reduce((acc, curr) => acc + curr.quantity, 0);
   const totalValuation = products.reduce((acc, curr) => acc + (curr.quantity * curr.unitPrice), 0);
   const lowStockItems = products.filter(p => p.quantity > 0 && p.quantity <= p.reorderPoint);
   const outOfStockItems = products.filter(p => p.quantity === 0);
-  const pendingReceiptsCount = receipts.filter(r => r.status === 'PENDING').length;
+  const pendingReceiptsCount = receipts.filter(r => r.status === 'Pending').length;
   const pendingDeliveriesCount = deliveries.filter(d => d.status === 'Pending').length;
   const pendingTransfersCount = transfers.filter(t => t.status === 'Pending').length;
 
@@ -314,7 +208,6 @@ export const InventoryProvider = ({ children }) => {
     <InventoryContext.Provider value={{
       products,
       receipts,
-      suppliers,
       deliveries,
       transfers,
       movements,
@@ -323,8 +216,6 @@ export const InventoryProvider = ({ children }) => {
       addProduct,
       editProduct,
       deleteProduct,
-      addReceipt,
-      validateReceipt,
       getStockStatus,
       kpis: {
         totalProducts,

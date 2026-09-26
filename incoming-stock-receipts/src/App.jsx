@@ -4,7 +4,6 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { Dashboard } from './components/Dashboard';
 import { Products } from './components/Products';
-import { Receipts } from './components/Receipts';
 import { Placeholder } from './components/Placeholder';
 
 const MainLayout = () => {
@@ -31,13 +30,19 @@ const MainLayout = () => {
       case 'products':
         return <Products />;
       case 'receipts':
-        return <Receipts />;
+        return (
+          <Placeholder 
+            title="Incoming Stock Receipts" 
+            description="Process incoming purchase orders, receive supplier shipments, and update inventory counts."
+            nextHourScope="Hour 3 Milestone"
+          />
+        );
       case 'deliveries':
         return (
           <Placeholder 
             title="Delivery Orders" 
             description="Pick, pack, ship outgoing customer orders, and subtract stock from designated locations."
-            nextHourScope="Hour 4 Milestone"
+            nextHourScope="Hour 3 Milestone"
           />
         );
       case 'transfers':
@@ -53,7 +58,7 @@ const MainLayout = () => {
           <Placeholder 
             title="Stock Adjustments" 
             description="Perform physical inventory counts, reconcile discrepancies, and record scrap/damage."
-            nextHourScope="Hour 5 Milestone"
+            nextHourScope="Hour 4 Milestone"
           />
         );
       case 'ledger':
